@@ -1,0 +1,12 @@
+{
+  "venvPath": ".",
+  "venv": "backend/.venv",
+  "include": ["backend"],
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "extraPaths": ["backend/.venv/lib/python3.12/site-packages"]
+    }
+  ],
+  "typeCheckingMode": "basic"
+}

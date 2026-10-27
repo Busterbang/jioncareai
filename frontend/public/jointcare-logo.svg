@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="96" viewBox="0 0 480 96" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">JointCare AI</title>
+  <desc id="desc">JointCare AI wordmark with a calm curved movement arc.</desc>
+  <rect width="96" height="96" rx="28" fill="#14201c"/>
+  <rect x="2" y="2" width="92" height="92" rx="26" stroke="#466055" stroke-width="2"/>
+  <path d="M22 62c7-20 17-30 26-30s19 10 26 30" stroke="#8dd9c2" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="48" cy="31" r="5" fill="#f3f4f3"/>
+  <path d="M31 66h34" stroke="#5e8f7d" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="120" y="57" fill="#f3f4f3" font-family="Manrope,Arial,sans-serif" font-size="37" font-weight="750" letter-spacing="-1.8">JointCare</text>
+  <text x="329" y="56" fill="#8dd9c2" font-family="Manrope,Arial,sans-serif" font-size="18" font-weight="700" letter-spacing="1.2">AI</text>
+  <text x="122" y="79" fill="#92999a" font-family="Manrope,Arial,sans-serif" font-size="10" font-weight="600" letter-spacing="2.2">UNDERSTAND EVERY MOVEMENT</text>
+</svg>
