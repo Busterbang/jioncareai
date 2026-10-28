@@ -128,7 +128,14 @@ export async function deleteTrustedContact(userId: string): Promise<void> {
 }
 
 export async function postApi<T>(path: string, accessToken: string, body?: unknown): Promise<T> {
-  const send = (token: string) => fetch(path, {
+  const resolveTarget = (p: string) => {
+    if (p.startsWith('http://') || p.startsWith('https://')) return p;
+    const customApi = (import.meta.env.PUBLIC_API_URL || '').trim();
+    if (customApi) return `${customApi.replace(/\/+$/, '')}/${p.replace(/^\/+/, '')}`;
+    return p;
+  };
+
+  const send = (token: string, targetPath: string = path) => fetch(resolveTarget(targetPath), {
     method: body === undefined ? 'GET' : 'POST',
     headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -141,6 +148,20 @@ export async function postApi<T>(path: string, accessToken: string, body?: unkno
     } catch { /* Fall back to the token supplied by the current auth state. */ }
   }
   let response = await send(token);
+
+  // If local dev server returned 404 on relative /api/v1 path (e.g. Astro preview or missing proxy),
+  // attempt fallback to local FastAPI backend on 127.0.0.1:8000
+  if (response.status === 404 && path.startsWith('/api/v1') && !path.startsWith('http')) {
+    try {
+      const fallback = await send(token, `http://127.0.0.1:8000${path}`);
+      if (fallback.ok || fallback.status !== 404) {
+        response = fallback;
+      }
+    } catch {
+      // Backend not running on port 8000 either
+    }
+  }
+
   const readResult = async (candidate: Response): Promise<Record<string, unknown>> => {
     const value = await candidate.json().catch(() => ({}));
     return value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -162,6 +183,9 @@ export async function postApi<T>(path: string, accessToken: string, body?: unkno
     const errorDetail = typeof result.detail === 'string' ? result.detail : '';
     if (response.status === 401) {
       throw new Error('Your sign-in session is no longer valid. Sign out and sign in again, then retry.');
+    }
+    if (response.status === 404) {
+      throw new Error(errorDetail || `API endpoint not found (404). Verify that the JointCare FastAPI backend is running on port 8000.`);
     }
     throw new Error(errorDetail || `Request failed (${response.status})`);
   }

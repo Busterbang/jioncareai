@@ -54,10 +54,14 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   while (true) {
     fb = esp_camera_fb_get();
     if (!fb) {
-      Serial.println("Camera capture failed; retrying...");
-      res = ESP_FAIL;
-      // Break out immediately — do not attempt to send NULL frame data.
-      break;
+      Serial.println("Camera capture failed; retrying frame...");
+      delay(30);
+      fb = esp_camera_fb_get();
+      if (!fb) {
+        Serial.println("Camera read failed; breaking stream loop to allow clean client reconnect");
+        res = ESP_FAIL;
+        break;
+      }
     }
     _jpg_buf_len = fb->len;
     _jpg_buf = fb->buf;
@@ -137,11 +141,16 @@ void setup() {
     config.fb_count = 1;
   }
 
-  // Camera init
+  // Camera init with frequency fallback
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    Serial.printf("❌ Camera init failed with error 0x%x", err);
-    return;
+    Serial.printf("❌ Camera init failed at 20MHz (0x%x). Retrying at 10MHz XCLK...\n", err);
+    config.xclk_freq_hz = 10000000;
+    err = esp_camera_init(&config);
+    if (err != ESP_OK) {
+      Serial.printf("❌ Camera init failed with error 0x%x. Verify ribbon cable and 5V power supply.\n", err);
+      return;
+    }
   }
   Serial.println("✅ Camera sensor initialized!");
 

@@ -129,29 +129,42 @@ bool postJson(const char *path, const String &body) {
 void calibrateAtRest() {
   Serial.printf("Hold still in the intended reference orientation for %u samples...\n", CALIBRATION_SAMPLES);
   double sums[6] = {0};
+  uint16_t validCount = 0;
   for (uint16_t i = 0; i < CALIBRATION_SAMPLES; i++) {
     sensors_event_t a, g, t;
-    mpu.getEvent(&a, &g, &t);
-    sums[0] += a.acceleration.x; sums[1] += a.acceleration.y; sums[2] += a.acceleration.z;
-    sums[3] += g.gyro.x; sums[4] += g.gyro.y; sums[5] += g.gyro.z;
+    if (mpu.getEvent(&a, &g, &t) && isfinite(a.acceleration.x)) {
+      sums[0] += a.acceleration.x; sums[1] += a.acceleration.y; sums[2] += a.acceleration.z;
+      sums[3] += g.gyro.x; sums[4] += g.gyro.y; sums[5] += g.gyro.z;
+      validCount++;
+    } else {
+      Serial.println("Warning: MPU6050 read failed during calibration sample; retrying...");
+    }
     delay(1000 / SAMPLE_RATE_HZ);
   }
+  if (validCount == 0) validCount = 1;
   for (int i = 0; i < 3; i++) {
-    accelBias[i] = sums[i] / CALIBRATION_SAMPLES;
-    gyroBias[i] = sums[i + 3] / CALIBRATION_SAMPLES;
+    accelBias[i] = sums[i] / validCount;
+    gyroBias[i] = sums[i + 3] / validCount;
   }
   // Assumes Z-up calibration: remove the stationary gravity component on Z.
   accelBias[2] -= 9.80665f;
-  const float meanX = sums[0] / CALIBRATION_SAMPLES;
-  const float meanY = sums[1] / CALIBRATION_SAMPLES;
-  const float meanZ = sums[2] / CALIBRATION_SAMPLES;
+  const float meanX = sums[0] / validCount;
+  const float meanY = sums[1] / validCount;
+  const float meanZ = sums[2] / validCount;
   referencePitchDegrees = atan2f(-meanX, sqrtf(meanY * meanY + meanZ * meanZ)) * 57.2957795f;
-  Serial.printf("Calibration complete. Reference pitch: %.1f degrees (relative orientation only).\n", referencePitchDegrees);
+  Serial.printf("Calibration complete (%u valid samples). Reference pitch: %.1f degrees (relative orientation only).\n", validCount, referencePitchDegrees);
 }
 
 void sampleSensor() {
   sensors_event_t a, g, t;
-  mpu.getEvent(&a, &g, &t);
+  if (!mpu.getEvent(&a, &g, &t)) {
+    Serial.println("MPU6050 read failed; sample skipped");
+    return;
+  }
+  if (!isfinite(a.acceleration.x) || !isfinite(a.acceleration.y) || !isfinite(a.acceleration.z)) {
+    Serial.println("MPU6050 returned non-finite reading; sample skipped");
+    return;
+  }
   float value[6] = {a.acceleration.x - accelBias[0], a.acceleration.y - accelBias[1], a.acceleration.z - accelBias[2], g.gyro.x - gyroBias[0], g.gyro.y - gyroBias[1], g.gyro.z - gyroBias[2]};
   if (!filterReady) { memcpy(filtered, value, sizeof(value)); filterReady = true; }
   else for (int i = 0; i < 6; i++) filtered[i] += FILTER_ALPHA * (value[i] - filtered[i]);
@@ -195,7 +208,21 @@ void setup() {
   delay(300);
   if (!validConfig()) { while (true) delay(1000); }
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  if (!mpu.begin(0x68, &Wire)) { Serial.println("MPU6050 not found at I2C 0x68; verify wiring/address"); while (true) delay(1000); }
+  Wire.setTimeOut(1000);
+
+  bool mpuDetected = false;
+  if (mpu.begin(0x68, &Wire)) {
+    Serial.println("MPU6050 initialized successfully at default I2C address 0x68");
+    mpuDetected = true;
+  } else if (mpu.begin(0x69, &Wire)) {
+    Serial.println("MPU6050 initialized successfully at alternate I2C address 0x69 (AD0 pulled HIGH)");
+    mpuDetected = true;
+  }
+  
+  if (!mpuDetected) {
+    Serial.println("MPU6050 not found at I2C 0x68 or 0x69; verify wiring (SDA=21, SCL=22, 3.3V, GND)");
+    while (true) delay(1000);
+  }
   mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
   mpu.setGyroRange(MPU6050_RANGE_250_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);

@@ -21,6 +21,7 @@ from urllib.parse import quote
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -380,6 +381,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await sb.close()
 
     api = FastAPI(title="JointCare API", version="1.0.0", description="Patient-controlled sensor and symptom records with non-diagnostic trend summaries.", lifespan=lifespan)
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     api.add_middleware(ApiBodyLimitMiddleware)
 
     @api.middleware("http")
