@@ -141,10 +141,27 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
 
   // 5. ESP32-CAM AI Vision State
   const [camIp, setCamIp] = useState('192.168.0.50');
+  const [streamUrl, setStreamUrl] = useState('');
   const [isCamStreaming, setIsCamStreaming] = useState(false);
+  const [streamError, setStreamError] = useState(false);
   const [visionJointAngle, setVisionJointAngle] = useState(82.4);
-  const [visionJointStatus, setVisionJointStatus] = useState<'aligned' | 'deviated' | 'posture_good'>('posture_good');
-  const [camFps, setCamFps] = useState(24);
+  const [camFps] = useState(24);
+
+  const toggleCameraConnection = () => {
+    if (isCamStreaming) {
+      setIsCamStreaming(false);
+      setStreamUrl('');
+      setStreamError(false);
+      notify('ESP32-CAM stream disconnected.');
+    } else {
+      const cleanIp = camIp.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      const url = `http://${cleanIp}:81/stream`;
+      setStreamUrl(url);
+      setIsCamStreaming(true);
+      setStreamError(false);
+      notify(`Connecting to ESP32-CAM at ${url}...`);
+    }
+  };
 
   const handleRecordMed = () => {
     const med = medications.find(m => m.id === selectedMed);
@@ -255,14 +272,16 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              {isCamStreaming ? (
+              {isCamStreaming && !streamError ? (
                 <>
-                  {/* MJPEG Stream or Simulated Feed */}
                   <img
-                    src={`http://${camIp}:81/stream`}
-                    alt="ESP32-CAM Stream"
+                    src={streamUrl}
+                    alt="ESP32-CAM Live Feed"
+                    crossOrigin="anonymous"
+                    onLoad={() => setStreamError(false)}
                     onError={() => {
-                      // Fallback overlay when local IP stream isn't physically on LAN
+                      setStreamError(true);
+                      notify('Could not load camera feed from ESP32 IP. Verify Wi-Fi network and IP.');
                     }}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
@@ -312,6 +331,29 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
                     <Eye size={13} /> Optical Keypoint Tracking: Hip-Knee-Ankle Validated
                   </div>
                 </>
+              ) : isCamStreaming && streamError ? (
+                <div style={{ textAlign: 'center', padding: 20 }}>
+                  <AlertTriangle size={36} color="#e74c3c" style={{ margin: '0 auto 10px auto' }} />
+                  <div style={{ color: '#f8d7da', fontSize: 13, fontWeight: 600 }}>ESP32-CAM Connection Failed</div>
+                  <div style={{ color: '#b5c0be', fontSize: 11, marginTop: 4, maxWidth: 360, lineHeight: 1.5 }}>
+                    Unable to reach stream at <code style={{ color: '#39c4ac' }}>{streamUrl}</code>.<br/>
+                    1. Ensure ESP32-CAM is powered and on the same Wi-Fi.<br/>
+                    2. Check the IP printed on the Serial Monitor (115200 baud).
+                  </div>
+                  <button
+                    type="button"
+                    className="btn ghost small"
+                    onClick={() => {
+                      setStreamError(false);
+                      const url = streamUrl;
+                      setStreamUrl('');
+                      setTimeout(() => setStreamUrl(url), 200);
+                    }}
+                    style={{ marginTop: 12, borderRadius: 6, fontSize: 11 }}
+                  >
+                    Retry Connection
+                  </button>
+                </div>
               ) : (
                 <div style={{ textAlign: 'center', padding: 20 }}>
                   <VideoOff size={36} color="#61706e" style={{ margin: '0 auto 10px auto' }} />
@@ -338,15 +380,7 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
                 type="button"
                 className={`btn ${isCamStreaming ? 'destructive' : 'primary'}`}
                 style={{ padding: '8px 16px', borderRadius: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
-                onClick={() => {
-                  const next = !isCamStreaming;
-                  setIsCamStreaming(next);
-                  if (next) {
-                    notify(`Connecting to ESP32-CAM stream at http://${camIp}:81/stream...`);
-                  } else {
-                    notify('ESP32-CAM stream disconnected.');
-                  }
-                }}
+                onClick={toggleCameraConnection}
               >
                 {isCamStreaming ? <><VideoOff size={14} /> Disconnect</> : <><Video size={14} /> Connect Camera</>}
               </button>
