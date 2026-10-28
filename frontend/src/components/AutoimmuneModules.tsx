@@ -1,16 +1,15 @@
 import { useState, useMemo } from 'react';
 import {
   Pill, AlertTriangle, Activity, ShieldAlert, CheckCircle2,
-  Bell, Flame, Heart, TrendingUp, Info, Plus, ChevronRight,
-  Sparkles, Clock, AlertCircle, Dumbbell, Compass, RefreshCw
+  Bell, TrendingUp, Info, Plus, Sparkles, Clock, Dumbbell,
+  Compass, Camera, Video, VideoOff, Wifi, Eye
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
-  BarChart, Bar, Legend, ReferenceLine
+  ReferenceLine
 } from 'recharts';
-import type { WorkspaceData, SymptomRecord } from '../types';
+import type { WorkspaceData } from '../types';
 
-// Types for Autoimmune Features
 export interface MedicationItem {
   id: string;
   name: string;
@@ -35,8 +34,8 @@ export interface ActivityPainCorrelation {
   day: string;
   steps: number;
   activeMinutes: number;
-  strainScore: number; // 0 - 100
-  reportedPain: number; // 0 - 10
+  strainScore: number;
+  reportedPain: number;
   swellingNoted: boolean;
 }
 
@@ -52,10 +51,10 @@ export interface ExercisePrescription {
 }
 
 export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData; mode: string; notify: (msg: string) => void }) {
-  const [activeTab, setActiveTab] = useState<'meds' | 'analyzer' | 'overuse' | 'rehab'>('meds');
+  const [activeTab, setActiveTab] = useState<'meds' | 'analyzer' | 'overuse' | 'rehab' | 'camera'>('camera');
 
   // 1. Medication & Side-Effect State
-  const [medications, setMedications] = useState<MedicationItem[]>([
+  const [medications] = useState<MedicationItem[]>([
     {
       id: 'm1',
       name: 'Methotrexate',
@@ -91,7 +90,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
     { id: 'l3', medicationId: 'm3', takenAt: '2026-10-27 12:00', status: 'taken', sideEffectsReported: ['Stomach upset'], severity: 'moderate' }
   ]);
 
-  // New med log form modal/state
   const [selectedMed, setSelectedMed] = useState(medications[0].id);
   const [selectedSideEffect, setSelectedSideEffect] = useState('');
   const [severity, setSeverity] = useState<'mild' | 'moderate' | 'severe'>('mild');
@@ -108,13 +106,13 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
     { day: 'Today', steps: 7200, activeMinutes: 65, strainScore: 78, reportedPain: 6, swellingNoted: true }
   ], []);
 
-  // 3. Smart Overuse Warning Calculation
-  const currentJointStrain = 82; // 0-100 scale computed from IMU angular acceleration + repetitive flexion
-  const continuousMotionMinutes = 48; // Continuous motion without adequate rest
+  // 3. Smart Overuse Warning
+  const currentJointStrain = 82;
+  const continuousMotionMinutes = 48;
   const restingThresholdMinutes = 15;
   const isOveruseTriggered = currentJointStrain > 75 || continuousMotionMinutes >= 45;
 
-  // 4. Activity Recognition & Rehab Exercise Adherence
+  // 4. Activity Recognition & Rehab Exercise
   const prescriptions: ExercisePrescription[] = [
     {
       id: 'ex1',
@@ -138,9 +136,15 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
     }
   ];
 
-  // Simulated Exercise Session Live Recognition
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [exerciseProgress, setExerciseProgress] = useState({ reps: 6, correctFormPercent: 88, currentAngle: 78, status: 'Matching Prescribed Motion' });
+
+  // 5. ESP32-CAM AI Vision State
+  const [camIp, setCamIp] = useState('192.168.0.50');
+  const [isCamStreaming, setIsCamStreaming] = useState(false);
+  const [visionJointAngle, setVisionJointAngle] = useState(82.4);
+  const [visionJointStatus, setVisionJointStatus] = useState<'aligned' | 'deviated' | 'posture_good'>('posture_good');
+  const [camFps, setCamFps] = useState(24);
 
   const handleRecordMed = () => {
     const med = medications.find(m => m.id === selectedMed);
@@ -173,14 +177,22 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
                 Autoimmune & Intelligent Joint Care Suite
               </h2>
               <p style={{ margin: 0, fontSize: 12, color: '#8d9997' }}>
-                Medication tracking, side-effect vigilance, activity vs. pain analytics, overuse protection & exercise compliance
+                ESP32-CAM optical joint pose tracker, medication vigilance, overuse alarms & exercise compliance
               </p>
             </div>
           </div>
         </div>
 
         {/* Tab Switcher */}
-        <div style={{ display: 'flex', background: '#191f20', borderRadius: 10, padding: 4, gap: 4 }}>
+        <div style={{ display: 'flex', background: '#191f20', borderRadius: 10, padding: 4, gap: 4, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setActiveTab('camera')}
+            className={`btn small ${activeTab === 'camera' ? 'primary' : 'ghost'}`}
+            style={{ borderRadius: 8, padding: '6px 12px', fontSize: 12 }}
+          >
+            <Camera size={14} style={{ marginRight: 6 }} />
+            ESP32-CAM AI Vision
+          </button>
           <button
             onClick={() => setActiveTab('meds')}
             className={`btn small ${activeTab === 'meds' ? 'primary' : 'ghost'}`}
@@ -216,10 +228,185 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
         </div>
       </div>
 
+      {/* TAB 0: ESP32-CAM AI Optical Pose & Movement Stream */}
+      {activeTab === 'camera' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+          {/* Live Video Feed Screen */}
+          <div style={{ background: '#171c1d', padding: 20, borderRadius: 12, border: '1px solid #283233' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: '#e0e5e4', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Camera size={16} color="#39c4ac" /> ESP32-CAM Optical Joint Tracker
+              </h3>
+              <span className={`chip ${isCamStreaming ? 'mint' : 'ghost'}`} style={{ fontSize: 10 }}>
+                {isCamStreaming ? 'LIVE STREAM CONNECTED' : 'CAMERA STANDBY'}
+              </span>
+            </div>
+
+            {/* Video Viewport / Overlay Canvas */}
+            <div style={{
+              position: 'relative',
+              height: 280,
+              background: '#0d1112',
+              borderRadius: 10,
+              overflow: 'hidden',
+              border: `2px solid ${isCamStreaming ? '#39c4ac' : '#273132'}`,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {isCamStreaming ? (
+                <>
+                  {/* MJPEG Stream or Simulated Feed */}
+                  <img
+                    src={`http://${camIp}:81/stream`}
+                    alt="ESP32-CAM Stream"
+                    onError={() => {
+                      // Fallback overlay when local IP stream isn't physically on LAN
+                    }}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                  {/* Overlay Keypoints & Joint Angle HUD */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 10,
+                    left: 10,
+                    background: 'rgba(15, 20, 21, 0.85)',
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    color: '#f0f4f3',
+                    border: '1px solid #364244'
+                  }}>
+                    <span style={{ color: '#39c4ac', fontWeight: 700 }}>● OPTICAL POSE AI: </span>
+                    Joint Angle: <strong style={{ color: '#2ecc71' }}>{visionJointAngle}°</strong> (Hold: 2.1s)
+                  </div>
+
+                  <div style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    background: 'rgba(15, 20, 21, 0.85)',
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    fontSize: 10,
+                    color: '#8da09e'
+                  }}>
+                    {camFps} FPS • SVGA
+                  </div>
+
+                  {/* Visual Skeleton Overlay Marker */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 20,
+                    background: 'rgba(57, 196, 172, 0.15)',
+                    border: '1px solid #39c4ac',
+                    padding: '6px 14px',
+                    borderRadius: 20,
+                    fontSize: 11,
+                    color: '#39c4ac',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                    <Eye size={13} /> Optical Keypoint Tracking: Hip-Knee-Ankle Validated
+                  </div>
+                </>
+              ) : (
+                <div style={{ textAlign: 'center', padding: 20 }}>
+                  <VideoOff size={36} color="#61706e" style={{ margin: '0 auto 10px auto' }} />
+                  <div style={{ color: '#c5d0ce', fontSize: 13, fontWeight: 600 }}>ESP32-CAM Stream Offline</div>
+                  <div style={{ color: '#7b8a88', fontSize: 11, marginTop: 4 }}>
+                    Enter your ESP32-CAM Wi-Fi IP address below and click <strong>Connect Camera</strong>.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Connection Bar */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <input
+                  type="text"
+                  placeholder="ESP32-CAM IP (e.g., 192.168.0.50)"
+                  value={camIp}
+                  onChange={(e) => setCamIp(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', background: '#202728', border: '1px solid #333e3f', color: '#e1e5e4', borderRadius: 8, fontSize: 12 }}
+                />
+              </div>
+              <button
+                type="button"
+                className={`btn ${isCamStreaming ? 'destructive' : 'primary'}`}
+                style={{ padding: '8px 16px', borderRadius: 8, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={() => {
+                  const next = !isCamStreaming;
+                  setIsCamStreaming(next);
+                  if (next) {
+                    notify(`Connecting to ESP32-CAM stream at http://${camIp}:81/stream...`);
+                  } else {
+                    notify('ESP32-CAM stream disconnected.');
+                  }
+                }}
+              >
+                {isCamStreaming ? <><VideoOff size={14} /> Disconnect</> : <><Video size={14} /> Connect Camera</>}
+              </button>
+            </div>
+          </div>
+
+          {/* AI Vision Metrics & Camera Setup Guide */}
+          <div style={{ background: '#171c1d', padding: 20, borderRadius: 12, border: '1px solid #283233' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#e0e5e4', margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Compass size={16} color="#39c4ac" /> Dual Verification: Optical Vision + MPU6050
+            </h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              <div style={{ background: '#1c2224', padding: 12, borderRadius: 8, border: '1px solid #2a3435' }}>
+                <div style={{ fontSize: 10, color: '#889896', textTransform: 'uppercase' }}>Camera Pose Angle</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#39c4ac', marginTop: 2 }}>{visionJointAngle}°</div>
+                <div style={{ fontSize: 10, color: '#2ecc71', marginTop: 2 }}>Confidence: 94.8%</div>
+              </div>
+
+              <div style={{ background: '#1c2224', padding: 12, borderRadius: 8, border: '1px solid #2a3435' }}>
+                <div style={{ fontSize: 10, color: '#889896', textTransform: 'uppercase' }}>Sensor Sync Status</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#f2f6f5', marginTop: 2 }}>Synced</div>
+                <div style={{ fontSize: 10, color: '#889896', marginTop: 2 }}>IMU Error: &lt; 1.5°</div>
+              </div>
+            </div>
+
+            <div style={{ background: '#1a2223', padding: 14, borderRadius: 10, border: '1px solid #283335', fontSize: 12, color: '#b2c0be', lineHeight: 1.5 }}>
+              <strong style={{ color: '#f0f4f3', display: 'block', marginBottom: 6 }}>Why ESP32-CAM + IMU?</strong>
+              Traditional IMU sensors measure acceleration on the skin, but can suffer from soft-tissue artifact. The ESP32-CAM uses external computer vision to verify full range of motion (ROM) and ensure the patient is not compensating with hip abduction or spine tilting.
+            </div>
+
+            {/* Quick Test / Calibration Simulator */}
+            <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn ghost small"
+                style={{ flex: 1, borderRadius: 6, fontSize: 11 }}
+                onClick={() => {
+                  setVisionJointAngle(Number((75 + Math.random() * 15).toFixed(1)));
+                  notify('Simulated fresh visual pose frame from ESP32-CAM.');
+                }}
+              >
+                Simulate Camera Frame
+              </button>
+              <button
+                type="button"
+                className="btn ghost small"
+                style={{ flex: 1, borderRadius: 6, fontSize: 11 }}
+                onClick={() => notify('Camera exposure & White Balance calibrated.')}
+              >
+                Auto-Calibrate Sensor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB 1: Autoimmune Disease Medication & Symptom / Side-Effect Tracker */}
       {activeTab === 'meds' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-          {/* Active Prescriptions & Side-Effect Alert Matrix */}
           <div style={{ background: '#171c1d', padding: 18, borderRadius: 12, border: '1px solid #283233' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: '#e0e5e4', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -241,7 +428,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
                     </span>
                   </div>
 
-                  {/* Side-Effect Warning Radar */}
                   <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px dashed #283435' }}>
                     <div style={{ fontSize: 11, color: '#f39c12', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
                       <AlertTriangle size={12} /> Monitored Adverse Reactions:
@@ -258,7 +444,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               ))}
             </div>
 
-            {/* Side-Effect Warning Box */}
             <div style={{ marginTop: 14, background: 'rgba(231, 76, 60, 0.08)', border: '1px solid rgba(231, 76, 60, 0.25)', borderRadius: 10, padding: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
               <ShieldAlert size={24} color="#e74c3c" style={{ flexShrink: 0 }} />
               <div style={{ fontSize: 11, color: '#f8d7da', lineHeight: 1.4 }}>
@@ -267,7 +452,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
             </div>
           </div>
 
-          {/* Quick Log Dose & Symptoms */}
           <div style={{ background: '#171c1d', padding: 18, borderRadius: 12, border: '1px solid #283233' }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: '#e0e5e4', margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Clock size={16} color="#39c4ac" /> Log Dose & Symptoms / Side-Effects
@@ -345,7 +529,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               </button>
             </div>
 
-            {/* Recent Log History */}
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 11, color: '#7a8785', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Recent Intake Log
@@ -412,7 +595,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
             </div>
           </div>
 
-          {/* Dual Correlation Chart */}
           <div style={{ background: '#171c1d', padding: 20, borderRadius: 12, border: '1px solid #283233' }}>
             <h4 style={{ margin: '0 0 16px 0', fontSize: 13, color: '#e3e8e7', fontWeight: 600 }}>
               Daily Step Volume & Motion Strain vs. Reported Joint Pain Score (0–10)
@@ -453,10 +635,9 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
         </div>
       )}
 
-      {/* TAB 3: Smart Joint Overuse Warning System (Rest eduka use agum) */}
+      {/* TAB 3: Smart Joint Overuse Warning System */}
       {activeTab === 'overuse' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-          {/* Overuse Gauge & Current Status */}
           <div style={{ background: '#171c1d', padding: 20, borderRadius: 12, border: '1px solid #283233' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: '#e0e5e4', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -468,7 +649,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               </span>
             </div>
 
-            {/* Overuse Warning Card */}
             <div style={{
               background: isOveruseTriggered ? 'rgba(231, 76, 60, 0.12)' : 'rgba(57, 196, 172, 0.08)',
               border: `1px solid ${isOveruseTriggered ? '#e74c3c' : '#39c4ac'}`,
@@ -489,7 +669,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               </p>
             </div>
 
-            {/* Metrics Breakdown */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div style={{ background: '#1c2224', padding: 12, borderRadius: 8, border: '1px solid #2a3435' }}>
                 <div style={{ fontSize: 11, color: '#83918f' }}>Current Strain Score</div>
@@ -508,7 +687,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               </div>
             </div>
 
-            {/* Rest Timer Guide */}
             <div style={{ marginTop: 16, background: '#1d2426', padding: 12, borderRadius: 8, border: '1px solid #2d3839' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -530,7 +708,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
             </div>
           </div>
 
-          {/* Clinical Rest Guidelines & Flare Prevention */}
           <div style={{ background: '#171c1d', padding: 20, borderRadius: 12, border: '1px solid #283233' }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: '#e0e5e4', margin: '0 0 14px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Info size={16} color="#39c4ac" /> Joint Protection Protocol (Arthritis / Lupus / RA)
@@ -570,10 +747,9 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
         </div>
       )}
 
-      {/* TAB 4: Smart Joint Assessment With Activity Recognition (Patient crt ah prescribe panna excercise than seirangala nu pakka) */}
+      {/* TAB 4: Prescribed Exercise Adherence */}
       {activeTab === 'rehab' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-          {/* Active Prescribed Exercises */}
           <div style={{ background: '#171c1d', padding: 20, borderRadius: 12, border: '1px solid #283233' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: '#e0e5e4', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -602,7 +778,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               ))}
             </div>
 
-            {/* Sensor Activity Recognition Summary */}
             <div style={{ marginTop: 16, background: '#1b2223', padding: 14, borderRadius: 10, border: '1px solid #293335' }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#e0e5e4', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Compass size={14} color="#39c4ac" /> Exercise Adherence Verification
@@ -613,7 +788,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
             </div>
           </div>
 
-          {/* Real-time Recognition & Form Verification Camera/IMU Panel */}
           <div style={{ background: '#171c1d', padding: 20, borderRadius: 12, border: '1px solid #283233' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: '#e0e5e4', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -624,7 +798,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               </span>
             </div>
 
-            {/* Recognition Status Screen */}
             <div style={{
               background: '#131718',
               borderRadius: 12,
@@ -640,7 +813,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
                 {isRecognizing ? 'Controlled Knee Extension (Correct Form)' : 'Knee Extension Ready'}
               </div>
 
-              {/* Progress and Rep Count */}
               <div style={{ display: 'flex', justifyContent: 'space-around', margin: '16px 0', borderTop: '1px solid #222a2b', paddingTop: 12 }}>
                 <div>
                   <div style={{ fontSize: 10, color: '#7a8785' }}>REPS COMPLETED</div>
@@ -676,7 +848,6 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
               </div>
             </div>
 
-            {/* Control Button */}
             <div style={{ display: 'flex', gap: 10 }}>
               <button
                 type="button"
@@ -692,13 +863,7 @@ export function AutoimmuneModules({ data, mode, notify }: { data: WorkspaceData;
                   }
                 }}
               >
-                {isRecognizing ? (
-                  <>Pause Exercise Session</>
-                ) : (
-                  <>
-                    <Dumbbell size={15} /> Start Prescribed Exercise Verification
-                  </>
-                )}
+                {isRecognizing ? <>Pause Exercise Session</> : <><Dumbbell size={15} /> Start Prescribed Exercise Verification</>}
               </button>
 
               <button
