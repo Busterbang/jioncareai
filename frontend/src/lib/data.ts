@@ -57,6 +57,16 @@ export function getDemoWorkspace(): WorkspaceData {
 
 export async function loadWorkspace(userId: string, accessToken: string): Promise<WorkspaceData> {
   if (!supabase) throw new Error('Supabase is not configured. Use demo mode or configure the browser-safe project variables.');
+  
+  // Safely attempt device fetch from backend, returning empty list if backend is not running
+  const fetchDevices = async (): Promise<WorkspaceData['devices']> => {
+    try {
+      return await postApi<WorkspaceData['devices']>('/api/v1/sensor/devices/status', accessToken);
+    } catch {
+      return [];
+    }
+  };
+
   const [profileResult, settingResult, sessionsResult, readingsResult, symptomsResult, analysisResult, devices, contactResult] = await Promise.all([
     supabase.from('profiles').select('id,display_name,role').eq('id', userId).maybeSingle(),
     supabase.from('patient_settings').select('patient_id,monitored_joint,affected_side,preferred_units,timezone').eq('patient_id', userId).maybeSingle(),
@@ -64,7 +74,7 @@ export async function loadWorkspace(userId: string, accessToken: string): Promis
     supabase.from('sensor_readings').select('id,patient_id,session_id,device_id,measured_at,accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,relative_angle_degrees,source,quality').eq('patient_id', userId).order('measured_at', { ascending: false }).limit(500),
     supabase.from('symptom_records').select('id,patient_id,recorded_at,joint,pain_score,stiffness_score,swelling,discomfort,activity,notes,source').eq('patient_id', userId).order('recorded_at', { ascending: false }).limit(100),
     supabase.from('analysis_results').select('summary,metrics,quality,generated_at').eq('patient_id', userId).order('generated_at', { ascending: false }).limit(1).maybeSingle(),
-    postApi<WorkspaceData['devices']>('/api/v1/sensor/devices/status', accessToken),
+    fetchDevices(),
     supabase.from('trusted_emergency_contacts').select('patient_id,contact_name,phone_e164,updated_at').eq('patient_id', userId).maybeSingle(),
   ]);
   const errors = [profileResult.error, settingResult.error, sessionsResult.error, readingsResult.error, symptomsResult.error, analysisResult.error, contactResult.error].filter(Boolean);
