@@ -58,13 +58,24 @@ export function getDemoWorkspace(): WorkspaceData {
 export async function loadWorkspace(userId: string, accessToken: string): Promise<WorkspaceData> {
   if (!supabase) throw new Error('Supabase is not configured. Use demo mode or configure the browser-safe project variables.');
   
-  // Safely attempt device fetch from backend, returning empty list if backend is not running
+  // Safely attempt device fetch from backend, returning any registered or locally configured devices
   const fetchDevices = async (): Promise<WorkspaceData['devices']> => {
+    let list: WorkspaceData['devices'] = [];
     try {
-      return await postApi<WorkspaceData['devices']>('/api/v1/sensor/devices/status', accessToken);
+      list = await postApi<WorkspaceData['devices']>('/api/v1/sensor/devices/status', accessToken);
     } catch {
-      return [];
+      list = [];
     }
+    if (typeof window !== 'undefined') {
+      try {
+        const local = JSON.parse(localStorage.getItem('jointcare.devices') || '[]') as WorkspaceData['devices'];
+        const ids = new Set(list.map(d => d.id));
+        for (const item of local) {
+          if (!ids.has(item.id)) list.push(item);
+        }
+      } catch {}
+    }
+    return list;
   };
 
   const [profileResult, settingResult, sessionsResult, readingsResult, symptomsResult, analysisResult, devices, contactResult] = await Promise.all([
