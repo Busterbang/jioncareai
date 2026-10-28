@@ -54,27 +54,28 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   while (true) {
     fb = esp_camera_fb_get();
     if (!fb) {
-      Serial.println("Camera capture failed");
+      Serial.println("Camera capture failed; retrying...");
       res = ESP_FAIL;
-    } else {
-      _jpg_buf_len = fb->len;
-      _jpg_buf = fb->buf;
+      // Break out immediately — do not attempt to send NULL frame data.
+      break;
     }
-    if (res == ESP_OK) {
-      size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
-      res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
-    }
+    _jpg_buf_len = fb->len;
+    _jpg_buf = fb->buf;
+
+    size_t hlen = snprintf((char *)part_buf, 64, _STREAM_PART, _jpg_buf_len);
+    res = httpd_resp_send_chunk(req, (const char *)part_buf, hlen);
     if (res == ESP_OK) {
       res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
     }
     if (res == ESP_OK) {
       res = httpd_resp_send_chunk(req, _STREAM_BOUNDARY, strlen(_STREAM_BOUNDARY));
     }
-    if (fb) {
-      esp_camera_fb_return(fb);
-      fb = NULL;
-      _jpg_buf = NULL;
-    } else if (res != ESP_OK) {
+
+    esp_camera_fb_return(fb);
+    fb = NULL;
+    _jpg_buf = NULL;
+
+    if (res != ESP_OK) {
       break;
     }
   }
